@@ -165,6 +165,21 @@ mvn spring-boot:run "-Dspring-boot.run.arguments=--agent.eval.run=true --server.
 | 指代改写 | 第 1 轮问川渝火锅，第 2 轮「它几点关门」→ 改写为「川渝火锅（哈工大店）几点关门」 |
 | 限流 | 配额设 2，前 2 次正常、第 3 次返回 429 |
 | Redis 隔离 | db0 只有 agent 自己的 key，db1 只有后端的 `login:token:*` |
+| **跨服务下单** | 「帮我抢一张 2 号秒杀券」→ 工具带用户 token 调后端，Redis 库存 100→99、DB 库存 100→99、新增订单 `status=1` |
+
+### 联调时发现的后端 bug
+
+代用户抢券时暴露了一个真问题：**用户取消订单后，再也抢不到同一张券**。
+
+- 现象：Redis 扣了库存、已购集合也记了，但数据库没有新订单 —— 少卖一件。
+- 原因：消费端查重 `count(user_id, voucher_id)` 把**已取消**的订单也算成"已购买"，
+  直接跳过落库；唯一索引 `(user_id, voucher_id)` 也不允许再插一条。
+- 修法：唯一索引加一个可空标记 `active_flag`（有效=1，取消置 NULL）。
+  MySQL 唯一索引对 NULL 不去重，于是"同一张券可以有多条已取消记录、但只有一条有效记录"。
+
+修复后实测：Redis 库存 99、DB 库存 99、新订单 `status=1 / active_flag=1`，旧单 `status=4 / active_flag=NULL`。
+
+> 能发现这个 bug，正是因为 agent 会**真的去调后端接口**；只做离线的 RAG demo 永远碰不到。
 
 > ⚠️ **Redis 隔离的坑**：Spring Boot 的 Redis 自动配置是
 > `@ConditionalOnMissingBean(RedisConnectionFactory)`。只要容器里出现任意一个工厂，
