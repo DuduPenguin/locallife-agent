@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalLife 商户助手</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+            background: #f5f6f8; display: flex; justify-content: center; height: 100vh;
+        }
+        .app { width: 100%; max-width: 720px; display: flex; flex-direction: column; background: #fff; }
+        header {
+            padding: 16px 20px; border-bottom: 1px solid #eee; display: flex;
+            align-items: center; justify-content: space-between;
+        }
+        header h1 { font-size: 16px; margin: 0; }
+        header small { color: #999; }
+        #log { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .msg { max-width: 82%; padding: 10px 14px; border-radius: 10px; line-height: 1.7; white-space: pre-wrap; font-size: 14px; }
+        .user { align-self: flex-end; background: #2e5c8a; color: #fff; }
+        .bot { align-self: flex-start; background: #f0f2f5; color: #1a1a1a; }
+        .tip { align-self: center; color: #999; font-size: 12px; }
+        footer { padding: 12px 16px; border-top: 1px solid #eee; display: flex; gap: 8px; }
+        input {
+            flex: 1; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+            font-size: 14px; outline: none;
+        }
+        input:focus { border-color: #2e5c8a; }
+        button {
+            padding: 10px 18px; border: none; border-radius: 8px; background: #2e5c8a;
+            color: #fff; font-size: 14px; cursor: pointer;
+        }
+        button:disabled { background: #b9c6d6; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header>
+        <h1>LocalLife 商户助手</h1>
+        <small id="meta"></small>
+    </header>
+    <div id="log">
+        <div class="tip">可以问：老王烧烤几点开门？我有哪些券？川渝火锅有学生优惠吗？</div>
+    </div>
+    <footer>
+        <input id="q" placeholder="问点什么…" autocomplete="off"/>
+        <button id="send">发送</button>
+    </footer>
+</div>
+
+<script>
+    const log = document.getElementById('log');
+    const input = document.getElementById('q');
+    const btn = document.getElementById('send');
+
+    // 演示用：真实项目里这个 id 应该来自登录态（LocalLife 的 Redis token）
+    const USER_ID = 1;
+    const SESSION_ID = 'web-' + Math.random().toString(36).slice(2, 8);
+    document.getElementById('meta').textContent = 'userId=' + USER_ID + ' · session=' + SESSION_ID;
+
+    function append(role, text) {
+        const div = document.createElement('div');
+        div.className = 'msg ' + role;
+        div.textContent = text;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+        return div;
+    }
+
+    async function ask() {
+        const q = input.value.trim();
+        if (!q) return;
+        input.value = '';
+        btn.disabled = true;
+        append('user', q);
+
+        const bot = append('bot', '');
+        let acc = '';
+
+        try {
+            const resp = await fetch(
+                '/agent/chat?message=' + encodeURIComponent(q) + '&sessionId=' + SESSION_ID,
+                { headers: { 'X-User-Id': USER_ID } }
+            );
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+
+                // Spring 的 TEXT_EVENT_STREAM 每块是 "data:xxx\n\n"
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop();
+                for (const part of parts) {
+                    const line = part.split('\n').find(l => l.startsWith('data:'));
+                    if (!line) continue;
+                    acc += line.slice(5);
+                    bot.textContent = acc;
+                    log.scrollTop = log.scrollHeight;
+                }
+            }
+        } catch (e) {
+            bot.textContent = acc + '\n[连接中断]';
+        } finally {
+            btn.disabled = false;
+            input.focus();
+        }
+    }
+
+    btn.addEventListener('click', ask);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### 本地环境变量（千万不要提交） ###
+http-client.env.json
+http-client.private.env.json
+.env
+
+### 日志 ###
+*.log
+logs/

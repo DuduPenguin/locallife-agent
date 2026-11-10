@@ -1,0 +1,96 @@
+server:
+  port: 8081
+
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: ${LLM_BASE_URL:https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1}
+      api-key: ${API-KEY:sk-none}
+      model-name: ${LLM_MODEL:qwen3.8-flash}
+      temperature: 0.3
+      timeout: 60s
+      log-requests: true
+      log-responses: true
+    streaming-chat-model:
+      base-url: ${LLM_BASE_URL:https://cn-beijing.maas.qianwenaiapi.com/compatible-mode/v1}
+      api-key: ${API-KEY:sk-none}
+      model-name: ${LLM_MODEL:qwen3.8-flash}
+      temperature: 0.3
+      timeout: 60s
+    embedding-model:
+      base-url: ${EMBEDDING_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${API-KEY:sk-none}
+      model-name: ${EMBEDDING_MODEL:qwen3.7-text-embedding-flash}
+      max-segments-per-batch: 20
+  community:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+spring:
+  application:
+    name: locallife-agent
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # 注意：LocalLife 后端用的是 db 1，这里用默认 db 0，两者互不干扰
+      database: 0
+  datasource:
+    # 直接连 LocalLife 的业务库，工具层查的是真实数据
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/locallife?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:123456}
+    hikari:
+      maximum-pool-size: 5
+
+# 本项目自己的配置
+agent:
+  # 召回条数 / 相似度阈值：后续做 Rerank 对比实验时，改这里就是一组数据
+  retrieval:
+    # vector = 只用向量；hybrid = 向量 + 关键词 RRF 融合（推荐）
+    mode: ${RETRIEVAL_MODE:hybrid}
+    max-results: 5
+    min-score: 0.6
+    # 每一路先取多少条候选
+    candidate-size: 15
+    # RRF 平滑系数，论文常用 60
+    rrf-k: 60
+  # 知识库灌入
+  ingest:
+    enabled: true
+    chunk-size: 500
+    chunk-overlap: 50
+  # 会话记忆：保留最近多少条消息
+  memory:
+    max-messages: 20
+    ttl-days: 1
+  # 评测：把 agent.eval.run 打开才会跑批并退出
+  eval:
+    run: false
+  # 与 LocalLife 后端联动
+  locallife:
+    base-url: ${LOCALLIFE_BASE_URL:http://localhost:8080}
+    # 后端的登录态在 db 1，agent 自己在 db 0
+    redis-database: 1
+    token-prefix: "login:token:"
+    token-ttl-seconds: 1800
+  auth:
+    # 本地调试时允许用 X-User-Id 头顶替 token；线上应设为 false
+    allow-header-fallback: true
+  # 指代改写：多轮对话里把「它几点关门」补全成完整问题
+  rewrite:
+    enabled: true
+  # 精排：召回后按 embedding 重算相关度
+  rerank:
+    enabled: true
+    top-n: 5
+  # 每日配额，防止脚本刷 token
+  quota:
+    daily-limit: 100
+
+logging:
+  level:
+    root: info
+    com.gao.agent: debug
+    dev.langchain4j: info
