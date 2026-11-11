@@ -1,5 +1,7 @@
 # LocalLife 商户助手（RAG + 工具调用）
 
+[![CI](https://github.com/DuduPenguin/locallife-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/DuduPenguin/locallife-agent/actions/workflows/ci.yml)
+
 给 LocalLife 本地生活平台加的自然语言入口：用户问「老厨家几点开门」「我有哪些券」，
 助手先检索商户知识库，需要实时数据时调工具查数据库或调后端接口，最后生成回答。
 
